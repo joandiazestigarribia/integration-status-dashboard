@@ -1,4 +1,4 @@
-import type { Integration, IntegrationKind, SyncEvent, SyncStatus } from "~/lib/types"
+import type { Integration, SyncEvent, SyncStatus } from "~/lib/types"
 import type {
   RawErpIntegration,
   RawLogisticsIntegration,
@@ -82,38 +82,6 @@ function mapErpStatus(healthy: boolean, hasPendingRetries: boolean): SyncStatus 
   if (healthy) return "up_to_date"
   if (hasPendingRetries) return "retrying"
   return "failed"
-}
-
-/** Firma común que exponen los tres adapters de arriba. */
-type NormalizerFor<TRaw> = (raw: TRaw) => Integration
-
-/**
- * Factory: dado un `kind`, devuelve el normalizador correcto. Agregar una
- * cuarta integración (p. ej. "marketplace") es sumar un caso acá, no tocar
- * la UI ni el resto de los adapters.
- */
-export function getNormalizer(
-  kind: IntegrationKind,
-): NormalizerFor<RawPaymentsIntegration | RawLogisticsIntegration | RawErpIntegration> {
-  switch (kind) {
-    case "payments":
-      return normalizePaymentsIntegration as NormalizerFor<
-        RawPaymentsIntegration | RawLogisticsIntegration | RawErpIntegration
-      >
-    case "logistics":
-      return normalizeLogisticsIntegration as NormalizerFor<
-        RawPaymentsIntegration | RawLogisticsIntegration | RawErpIntegration
-      >
-    case "erp":
-    case "marketplace":
-      return normalizeErpIntegration as NormalizerFor<
-        RawPaymentsIntegration | RawLogisticsIntegration | RawErpIntegration
-      >
-    default: {
-      const _exhaustive: never = kind
-      throw new Error(`Sin normalizador para: ${_exhaustive}`)
-    }
-  }
 }
 
 export function sortEventsDesc(events: SyncEvent[]): SyncEvent[] {

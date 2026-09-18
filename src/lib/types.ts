@@ -7,7 +7,7 @@
  * nunca les llega una forma cruda directamente.
  */
 
-export type IntegrationKind = "payments" | "logistics" | "erp" | "marketplace"
+export type IntegrationKind = "payments" | "logistics" | "erp"
 
 export type SyncStatus = "up_to_date" | "retrying" | "failed"
 
