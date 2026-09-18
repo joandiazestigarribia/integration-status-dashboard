@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node scripts/copy-standalone-assets.mjs && node .next/standalone/server.js",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "jest",
@@ -35,7 +35,6 @@
     "prettier": "^3.9.8",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "tailwindcss": "^4",
-    "ts-node": "^10.9.2",
     "typescript": "^5"
   }
 }
