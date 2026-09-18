@@ -4,11 +4,6 @@ Dashboard que muestra el estado de integraciones de **pagos, logística y ERP**
 por cliente (tenant), con reintentos, línea de tiempo de eventos, e
 instalable como PWA.
 
-Es un proyecto de portfolio pensado para una entrevista como Frontend
-Developer: el objetivo no es la cantidad de funcionalidades, sino mostrar
-criterio de arquitectura, testing y CI/CD dentro de un alcance chico y
-terminado.
-
 ## Por qué este proyecto
 
 - Es, en miniatura, el mismo tipo de problema que resuelven las empresas que
@@ -85,7 +80,7 @@ src/
 ## Qué NO hice, y por qué
 
 Ninguna de estas es una omisión accidental: cada una quedó afuera para no
-pasarme del alcance de un proyecto de portfolio de 1-2 fines de semana.
+pasarme del alcance de un proyecto pequeño.
 
 - **Sin backend ni base de datos real.** Los datos viven en memoria
   (`lib/mock-data.ts`) y la "API" (`lib/api.ts`) solo simula latencia de red.
