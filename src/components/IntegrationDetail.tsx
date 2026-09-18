@@ -13,11 +13,19 @@ interface IntegrationDetailProps {
 
 export function IntegrationDetail({ integration, onRetry }: IntegrationDetailProps) {
   const [isRetrying, setIsRetrying] = useState(false)
+  // `retryIntegration` está mockeada para resolver siempre (varía el
+  // resultado de negocio, nunca la promesa); no hay hoy una falla de red real
+  // que probar. Igual el código no asume que `onRetry` nunca va a rechazar:
+  // si lo hace, se avisa acá en vez de perderse como una promesa sin manejar.
+  const [hasError, setHasError] = useState(false)
 
   async function handleRetry() {
     setIsRetrying(true)
+    setHasError(false)
     try {
       await onRetry(integration)
+    } catch {
+      setHasError(true)
     } finally {
       setIsRetrying(false)
     }
@@ -45,6 +53,12 @@ export function IntegrationDetail({ integration, onRetry }: IntegrationDetailPro
           {isRetrying ? "Reintentando…" : "Reintentar"}
         </button>
       </div>
+
+      {hasError && (
+        <p className="mt-2 text-sm text-red-600 dark:text-red-400" role="alert">
+          No se pudo reintentar. Probá de nuevo.
+        </p>
+      )}
 
       <h3 className="mt-5 mb-2 text-sm font-medium text-neutral-500">Línea de tiempo</h3>
       <EventTimeline events={integration.events} />
