@@ -35,6 +35,11 @@ describe("normalizePaymentsIntegration", () => {
     expect(result.events).toHaveLength(1)
     expect(result.events[0].message).toBe("reintentando")
   })
+
+  it("mapea gateway_status 'down' a 'failed'", () => {
+    const result = normalizePaymentsIntegration({ ...raw, gateway_status: "down" })
+    expect(result.status).toBe("failed")
+  })
 })
 
 describe("normalizeLogisticsIntegration", () => {
