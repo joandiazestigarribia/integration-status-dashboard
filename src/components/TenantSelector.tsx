@@ -12,18 +12,22 @@ interface TenantSelectorProps {
  * Selector de cliente/tenant. Existe a propósito: el dashboard no asume
  * "un cliente fijo" como haría un fork por cliente, sino que la misma
  * plataforma sirve a varios tenants seleccionando entre ellos.
+ *
+ * Son botones simples con `aria-current`, no `role="tab"`. El patrón ARIA de
+ * tabs exige navegación con flechas y un solo tab-stop (roving tabindex); acá
+ * no hay tabpanels que mostrar/ocultar, así que ese contrato no aplicaba, y
+ * declarar el rol sin implementarlo completo es peor que no declararlo.
  */
 export function TenantSelector({ tenants, selectedTenantId, onSelect }: TenantSelectorProps) {
   return (
-    <div className="flex flex-wrap gap-2" role="tablist" aria-label="Seleccionar cliente">
+    <div className="flex flex-wrap gap-2" aria-label="Seleccionar cliente">
       {tenants.map((tenant) => {
         const isSelected = tenant.id === selectedTenantId
         return (
           <button
             key={tenant.id}
             type="button"
-            role="tab"
-            aria-selected={isSelected}
+            aria-current={isSelected ? "true" : undefined}
             onClick={() => onSelect(tenant.id)}
             className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
               isSelected

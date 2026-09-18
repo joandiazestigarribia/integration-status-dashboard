@@ -11,8 +11,8 @@ const tenants: Tenant[] = [
 describe("TenantSelector", () => {
   it("marca como seleccionado el tenant activo", () => {
     render(<TenantSelector tenants={tenants} selectedTenantId="tenant-a" onSelect={() => {}} />)
-    expect(screen.getByRole("tab", { name: /Aurora Retail/i })).toHaveAttribute("aria-selected", "true")
-    expect(screen.getByRole("tab", { name: /Bravo Foods/i })).toHaveAttribute("aria-selected", "false")
+    expect(screen.getByRole("button", { name: /Aurora Retail/i })).toHaveAttribute("aria-current", "true")
+    expect(screen.getByRole("button", { name: /Bravo Foods/i })).not.toHaveAttribute("aria-current")
   })
 
   it("llama a onSelect con el id del tenant clickeado", async () => {
@@ -20,7 +20,7 @@ describe("TenantSelector", () => {
     const onSelect = jest.fn()
     render(<TenantSelector tenants={tenants} selectedTenantId="tenant-a" onSelect={onSelect} />)
 
-    await user.click(screen.getByRole("tab", { name: /Bravo Foods/i }))
+    await user.click(screen.getByRole("button", { name: /Bravo Foods/i }))
 
     expect(onSelect).toHaveBeenCalledWith("tenant-b")
   })
