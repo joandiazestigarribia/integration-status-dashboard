@@ -1,5 +1,7 @@
 # Panel de sincronización (multi-cliente)
 
+![CI](https://github.com/joandiazestigarribia/integration-status-dashboard/actions/workflows/ci.yml/badge.svg)
+
 Dashboard que muestra el estado de integraciones de **pagos, logística y ERP**
 por cliente (tenant), con reintentos, línea de tiempo de eventos, e
 instalable como PWA.
@@ -39,12 +41,13 @@ npm run dev       # http://localhost:3000
 Otros scripts:
 
 ```bash
-npm run build          # build de producción
-npm run lint            # ESLint
-npm run typecheck       # genera los tipos de rutas de Next (next typegen) + tsc --noEmit
-npm run test             # Jest
-npm run test:coverage    # Jest con cobertura (la que lee SonarCloud)
-npm run format            # Prettier (con el plugin de Tailwind)
+npm run build       # build de producción (genera .next/standalone)
+npm run start       # copia public/ y los assets estáticos a .next/standalone y lo levanta: el mismo artefacto que corre en Docker
+npm run lint         # ESLint
+npm run typecheck    # genera los tipos de rutas de Next (next typegen) + tsc --noEmit
+npm run test         # Jest
+npm run test:coverage # Jest con cobertura de todo src (la que lee SonarCloud)
+npm run format       # Prettier (con el plugin de Tailwind)
 ```
 
 ## Estructura
@@ -57,7 +60,7 @@ src/
     types.ts            → modelo de dominio normalizado
     adapters/
       raw-types.ts       → formas "crudas" simuladas, una por integración
-      normalize.ts        → adapters + factory que las convierte al modelo común
+      normalize.ts        → adapters que las convierten al modelo común
     mock-data.ts          → datos de ejemplo por tenant
     api.ts                 → capa de acceso a datos (simula latencia y reintentos)
 ```
@@ -76,6 +79,16 @@ src/
 - **`localStorage` solo para una conveniencia de UI** (recordar el último
   cliente visto), nunca para estado que importe de verdad; por eso está
   envuelto en `try/catch` y no rompe nada si falla.
+- **El selector de tenant usa botones con `aria-current`, no `role="tab"`.**
+  El patrón ARIA de tabs exige navegación con flechas y un solo tab-stop
+  (roving tabindex); acá no hay tabpanels que mostrar/ocultar, así que ese
+  contrato no aplicaba. Declarar el rol sin implementarlo completo es peor
+  que no declararlo: un lector de pantalla anuncia un comportamiento que
+  después no está.
+- **El service worker solo cachea el app shell** (`/`, el manifest y los
+  íconos), no cualquier GET del mismo origen. Cachear todo hacía que el
+  caché creciera sin límite entre builds, porque nada podaba las entradas
+  viejas dentro de un mismo `CACHE_NAME`.
 
 ## Qué NO hice, y por qué
 
@@ -94,6 +107,12 @@ pasarme del alcance de un proyecto pequeño.
 - **Sin microservicios.** Todo vive en una sola app Next.js. Separar esto en
   servicios sería sobre-ingeniería para lo que este proyecto necesita
   demostrar.
+- **Sin manejo de error de red real en el reintento.** `retryIntegration`
+  está mockeada para resolver siempre (varía el resultado de negocio, nunca
+  la promesa), así que no hay hoy una falla de conexión real que probar. El
+  código igual no asume que nunca va a pasar: `IntegrationDetail` atrapa un
+  eventual rechazo y muestra un error en vez de perderlo en silencio, pero
+  no hay un caso mockeado que lo dispare.
 - **SonarCloud está en el pipeline pero requiere configuración propia** (un
   `SONAR_TOKEN` y una organización de SonarCloud): el workflow saltea ese
   paso si no hay token, en vez de romper el CI de quien clone el repo. Trivy
