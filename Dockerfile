@@ -15,9 +15,12 @@ RUN npm run build
 FROM node:24-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+# La imagen oficial puede ir atrasada con los parches de seguridad de Alpine
+# (p. ej. OpenSSL), así que los paquetes del sistema se actualizan al buildear.
 # npm, corepack y yarn vienen en la imagen base pero el runtime no los usa.
-RUN rm -rf /usr/local/lib/node_modules /opt/yarn-* \
-  /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg
+RUN apk upgrade --no-cache \
+  && rm -rf /usr/local/lib/node_modules /opt/yarn-* \
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg
 COPY --from=build /app/public ./public
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
