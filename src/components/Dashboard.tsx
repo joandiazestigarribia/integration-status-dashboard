@@ -121,6 +121,5 @@ function safeReadLastTenant(): string | null {
 function safeWriteLastTenant(tenantId: string): void {
   try {
     window.localStorage.setItem(LAST_TENANT_KEY, tenantId)
-  } catch {
-  }
+  } catch {}
 }
