@@ -35,12 +35,24 @@ jobs:
       - run: npm run test:coverage
 
       # Requiere el secret SONAR_TOKEN configurado en el repo (Settings > Secrets).
-      # Sin el secret, este paso se salta en vez de romper el pipeline para
+      # Sin el secret, el análisis se salta en vez de romper el pipeline para
       # quien clone el proyecto sin tener SonarCloud configurado. Con el secret,
       # espera el resultado del quality gate y falla si está en rojo
       # (sonar.qualitygate.wait en sonar-project.properties).
+      #
+      # Un `if` no puede leer `secrets` directamente. La doc de GitHub sugiere
+      # pasarlo a `env` a nivel de job para chequearlo, pero eso lo expondría
+      # también a `npm ci` y a los tests. Este paso mínimo convierte "hay
+      # token" en un flag, y el secret solo llega a este paso y al de Sonar.
+      - name: Detectar si SonarCloud está configurado
+        id: sonar
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ -n "$SONAR_TOKEN" ]; then echo "configured=true" >> "$GITHUB_OUTPUT"; fi
+
       - name: SonarCloud quality gate
-        if: ${{ env.SONAR_TOKEN != '' }}
+        if: steps.sonar.outputs.configured == 'true'
         uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4 # v8.2.2
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

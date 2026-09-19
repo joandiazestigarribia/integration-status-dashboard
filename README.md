@@ -31,7 +31,10 @@ instalable como PWA.
 
 ## Cómo correrlo
 
-Requiere Node 24 (LTS), la misma versión que usan el CI y el Dockerfile.
+El CI y el Dockerfile usan Node 24 (LTS). Localmente alcanza con Node 20.9 o
+superior (el mínimo de Next.js 16); en Node 20, `npm install` muestra un
+warning de `engines` de `@testing-library/jest-dom` (pide Node 22+) que no
+afecta al funcionamiento.
 
 ```bash
 npm install
