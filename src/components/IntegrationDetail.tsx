@@ -13,10 +13,6 @@ interface IntegrationDetailProps {
 
 export function IntegrationDetail({ integration, onRetry }: IntegrationDetailProps) {
   const [isRetrying, setIsRetrying] = useState(false)
-  // `retryIntegration` está mockeada para resolver siempre (varía el
-  // resultado de negocio, nunca la promesa); no hay hoy una falla de red real
-  // que probar. Igual el código no asume que `onRetry` nunca va a rechazar:
-  // si lo hace, se avisa acá en vez de perderse como una promesa sin manejar.
   const [hasError, setHasError] = useState(false)
 
   async function handleRetry() {

@@ -1,3 +1,2 @@
-# LF en el working tree en cualquier SO: Prettier (endOfLine "lf") y el CI en
-# Linux esperan LF, y en Windows core.autocrlf=true convertiría todo a CRLF.
+# LF en todos los SO: Prettier y el CI en Linux lo esperan (autocrlf convertiría a CRLF en Windows).
 * text=auto eol=lf

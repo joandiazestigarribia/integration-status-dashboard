@@ -5,12 +5,6 @@ import type {
 } from "~/lib/adapters/raw-types"
 import type { Tenant } from "~/lib/types"
 
-/**
- * Datos de ejemplo, con nombres de cliente/plataforma inventados. No hay
- * acá ninguna lógica de negocio real: es solo lo necesario para que el
- * dashboard tenga algo que mostrar por tenant.
- */
-
 export const tenants: Tenant[] = [
   { id: "tenant-aurora", name: "Aurora Retail", platform: "vtex" },
   { id: "tenant-bravo", name: "Bravo Foods", platform: "shopify" },

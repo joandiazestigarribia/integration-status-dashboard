@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { getIntegrations, getTenants, retryIntegration } from "~/lib/api"
+import { useEffect, useState, useSyncExternalStore } from "react"
+import { getIntegrations, retryIntegration } from "~/lib/api"
 import type { Integration, Tenant } from "~/lib/types"
 import { TenantSelector } from "~/components/TenantSelector"
 import { IntegrationCard } from "~/components/IntegrationCard"
@@ -9,34 +9,24 @@ import { IntegrationDetail } from "~/components/IntegrationDetail"
 
 const LAST_TENANT_KEY = "integration-dashboard:last-tenant"
 
-export function Dashboard() {
-  const [tenants, setTenants] = useState<Tenant[]>([])
-  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null)
+interface DashboardProps {
+  tenants: Tenant[]
+}
+
+export function Dashboard({ tenants }: DashboardProps) {
+  const rememberedTenantId = useSyncExternalStore(subscribeToNothing, safeReadLastTenant, () => null)
+  const [chosenTenantId, setChosenTenantId] = useState<string | null>(null)
+  const fallbackTenantId = tenants.some((tenant) => tenant.id === rememberedTenantId)
+    ? rememberedTenantId
+    : (tenants[0]?.id ?? null)
+  const selectedTenantId = chosenTenantId ?? fallbackTenantId
   const [integrations, setIntegrations] = useState<Integration[]>([])
-  // Tenant al que pertenecen los `integrations` actuales. Compararlo contra
-  // `selectedTenantId` nos da el loading state sin tener que setearlo a
-  // mano al arrancar el efecto (eso dispara renders en cascada).
   const [integrationsTenantId, setIntegrationsTenantId] = useState<string | null>(null)
   const [selectedIntegrationId, setSelectedIntegrationId] = useState<string | null>(null)
 
   useEffect(() => {
-    let isMounted = true
-    getTenants().then((loaded) => {
-      if (!isMounted) return
-      setTenants(loaded)
-      const remembered = safeReadLastTenant()
-      const initial = loaded.find((t) => t.id === remembered)?.id ?? loaded[0]?.id ?? null
-      setSelectedTenantId(initial)
-    })
-    return () => {
-      isMounted = false
-    }
-  }, [])
-
-  useEffect(() => {
     if (!selectedTenantId) return
     let isCurrent = true
-    safeWriteLastTenant(selectedTenantId)
 
     getIntegrations(selectedTenantId).then((loaded) => {
       if (!isCurrent) return
@@ -52,6 +42,11 @@ export function Dashboard() {
 
   const isLoading = selectedTenantId !== null && selectedTenantId !== integrationsTenantId
   const visibleIntegrations = isLoading ? [] : integrations
+
+  function handleSelectTenant(tenantId: string) {
+    safeWriteLastTenant(tenantId)
+    setChosenTenantId(tenantId)
+  }
 
   async function handleRetry(integration: Integration) {
     const updated = await retryIntegration(integration)
@@ -76,7 +71,7 @@ export function Dashboard() {
           <TenantSelector
             tenants={tenants}
             selectedTenantId={selectedTenantId}
-            onSelect={setSelectedTenantId}
+            onSelect={handleSelectTenant}
           />
         </div>
       )}
@@ -97,7 +92,11 @@ export function Dashboard() {
 
         <div>
           {selectedIntegration ? (
-            <IntegrationDetail integration={selectedIntegration} onRetry={handleRetry} />
+            <IntegrationDetail
+              key={selectedIntegration.id}
+              integration={selectedIntegration}
+              onRetry={handleRetry}
+            />
           ) : (
             <p className="text-sm text-neutral-500">Elegí una integración para ver el detalle.</p>
           )}
@@ -105,6 +104,10 @@ export function Dashboard() {
       </div>
     </div>
   )
+}
+
+function subscribeToNothing(): () => void {
+  return () => {}
 }
 
 function safeReadLastTenant(): string | null {
@@ -119,6 +122,5 @@ function safeWriteLastTenant(tenantId: string): void {
   try {
     window.localStorage.setItem(LAST_TENANT_KEY, tenantId)
   } catch {
-    // localStorage puede fallar (modo privado, cuotas, etc.); no es crítico.
   }
 }

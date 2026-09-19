@@ -5,13 +5,6 @@ import type {
   RawPaymentsIntegration,
 } from "~/lib/adapters/raw-types"
 
-/**
- * Patrón Adapter: cada función sabe traducir UNA forma cruda a `Integration`.
- * Nada fuera de este archivo necesita conocer `snake_case`, `gateway_status`,
- * `connectionHealth` ni `meta.healthy`: hay una sola capa de traducción, en
- * vez de que cada componente sepa leer cada formato.
- */
-
 export function normalizePaymentsIntegration(raw: RawPaymentsIntegration): Integration {
   return {
     id: raw.integration_id,

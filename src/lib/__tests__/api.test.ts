@@ -1,9 +1,6 @@
 import { getIntegrations, getTenants, retryIntegration } from "~/lib/api"
 import type { Integration } from "~/lib/types"
 
-// `delay()` usa setTimeout real (simula latencia de red); con fake timers
-// avanzamos el reloj a mano en vez de esperar los 350-700ms reales en cada
-// test.
 beforeEach(() => jest.useFakeTimers())
 afterEach(() => jest.useRealTimers())
 
@@ -52,7 +49,7 @@ describe("retryIntegration", () => {
   afterEach(() => jest.spyOn(Math, "random").mockRestore())
 
   it("cuando el reintento resuelve, pasa a up_to_date y agrega un evento nuevo al principio", async () => {
-    jest.spyOn(Math, "random").mockReturnValue(0.9) // > 0.33 → resuelve
+    jest.spyOn(Math, "random").mockReturnValue(0.9)
 
     const updated = await resolved(retryIntegration(base), 1000)
 
@@ -63,7 +60,7 @@ describe("retryIntegration", () => {
   })
 
   it("cuando el reintento no resuelve, se mantiene en retrying y no toca lastSyncedAt", async () => {
-    jest.spyOn(Math, "random").mockReturnValue(0.1) // <= 0.33 → sigue sin resolver
+    jest.spyOn(Math, "random").mockReturnValue(0.1)
 
     const updated = await resolved(retryIntegration(base), 1000)
 

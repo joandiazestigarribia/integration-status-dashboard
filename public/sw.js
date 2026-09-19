@@ -19,14 +19,6 @@ self.addEventListener("activate", (event) => {
   )
 })
 
-// Solo el app shell entra al caché; el resto (los chunks de JS/CSS con hash,
-// que cambian en cada build) va directo a red. Cachear cualquier GET del
-// mismo origen hacía que el caché creciera para siempre: nada lo podaba
-// dentro de un mismo CACHE_NAME, así que un chunk de una build vieja se
-// quedaba ahí aunque ya no existiera en el servidor. Con esto, lo único
-// versionado es el shell, y sigue siendo lo único que necesita este
-// dashboard para abrir sin red (los datos son mock, no hay una API real
-// cuyo último payload cachear).
 self.addEventListener("fetch", (event) => {
   const { request } = event
   if (request.method !== "GET" || new URL(request.url).origin !== self.location.origin) return

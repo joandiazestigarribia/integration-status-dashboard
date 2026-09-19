@@ -28,36 +28,56 @@ function makeIntegration(overrides: Partial<Integration> = {}): Integration {
 describe("Dashboard", () => {
   beforeEach(() => {
     window.localStorage.clear()
-    jest.mocked(api.getTenants).mockResolvedValue(tenants)
+    jest.clearAllMocks()
     jest
       .mocked(api.getIntegrations)
       .mockImplementation(async (tenantId) => [makeIntegration({ id: `${tenantId}-int`, tenantId })])
   })
 
-  it("selecciona el primer tenant por defecto y muestra sus integraciones", async () => {
-    render(<Dashboard />)
+  it("selecciona el primer tenant por defecto y pide sus integraciones en un solo fetch", async () => {
+    render(<Dashboard tenants={tenants} />)
 
-    expect(await screen.findByRole("button", { name: /Aurora Retail/i })).toHaveAttribute(
-      "aria-current",
-      "true",
-    )
+    expect(screen.getByRole("button", { name: /Aurora Retail/i })).toHaveAttribute("aria-current", "true")
     expect(await screen.findByText("Mercado Pago")).toBeInTheDocument()
+    expect(api.getIntegrations).toHaveBeenCalledTimes(1)
+    expect(api.getIntegrations).toHaveBeenCalledWith("tenant-a")
   })
 
   it("recuerda el último tenant visto en localStorage", async () => {
     window.localStorage.setItem("integration-dashboard:last-tenant", "tenant-b")
 
-    render(<Dashboard />)
+    render(<Dashboard tenants={tenants} />)
 
     expect(await screen.findByRole("button", { name: /Bravo Foods/i })).toHaveAttribute(
       "aria-current",
       "true",
     )
+    expect(await screen.findByText("Mercado Pago")).toBeInTheDocument()
+    expect(api.getIntegrations).toHaveBeenCalledTimes(1)
+    expect(api.getIntegrations).toHaveBeenCalledWith("tenant-b")
+  })
+
+  it("ignora un tenant recordado que ya no existe y usa el primero", async () => {
+    window.localStorage.setItem("integration-dashboard:last-tenant", "tenant-borrado")
+
+    render(<Dashboard tenants={tenants} />)
+
+    expect(screen.getByRole("button", { name: /Aurora Retail/i })).toHaveAttribute("aria-current", "true")
+    expect(await screen.findByText("Mercado Pago")).toBeInTheDocument()
+  })
+
+  it("guarda en localStorage el tenant que elige el usuario", async () => {
+    const user = userEvent.setup()
+    render(<Dashboard tenants={tenants} />)
+
+    await user.click(screen.getByRole("button", { name: /Bravo Foods/i }))
+
+    expect(window.localStorage.getItem("integration-dashboard:last-tenant")).toBe("tenant-b")
   })
 
   it("muestra un loading state mientras cambia de tenant, y lo saca al terminar", async () => {
     const user = userEvent.setup()
-    render(<Dashboard />)
+    render(<Dashboard tenants={tenants} />)
     await screen.findByText("Mercado Pago")
 
     let resolveSecond: (value: Integration[]) => void = () => {}
@@ -68,7 +88,7 @@ describe("Dashboard", () => {
         }),
     )
 
-    await user.click(await screen.findByRole("button", { name: /Bravo Foods/i }))
+    await user.click(screen.getByRole("button", { name: /Bravo Foods/i }))
     expect(screen.getByText("Cargando integraciones…")).toBeInTheDocument()
 
     resolveSecond([makeIntegration({ id: "tenant-b-int", tenantId: "tenant-b", name: "Stripe" })])
@@ -79,17 +99,11 @@ describe("Dashboard", () => {
 
   it("selecciona una integración y actualiza el detalle al reintentar", async () => {
     const user = userEvent.setup()
-    // "up_to_date" (el default de makeIntegration) deshabilita el botón de
-    // reintentar; para poder clickearlo, la integración inicial tiene que
-    // arrancar en un estado que sí lo permita.
     jest
       .mocked(api.getIntegrations)
       .mockImplementation(async (tenantId) => [
         makeIntegration({ id: `${tenantId}-int`, tenantId, status: "failed" }),
       ])
-    // Preserva el id de la integración recibida, igual que la implementación
-    // real (que parte de `{ ...integration, ... }`): así el `.map()` por id
-    // que hace Dashboard la encuentra y la reemplaza.
     jest.mocked(api.retryIntegration).mockImplementation(async (integration) => ({
       ...integration,
       status: "retrying",
@@ -99,11 +113,8 @@ describe("Dashboard", () => {
       ],
     }))
 
-    render(<Dashboard />)
+    render(<Dashboard tenants={tenants} />)
     await user.click(await screen.findByRole("button", { name: /Mercado Pago/i }))
-    // level: 2 para el <h2> del detalle: la tarjeta de la lista también tiene
-    // un heading "Mercado Pago" (su <h3>), y con el detalle abierto ambos
-    // coexisten en el DOM.
     expect(screen.getByRole("heading", { name: "Mercado Pago", level: 2 })).toBeInTheDocument()
 
     await user.click(screen.getByRole("button", { name: "Reintentar" }))
@@ -111,20 +122,46 @@ describe("Dashboard", () => {
     expect(await screen.findByText("reintentando")).toBeInTheDocument()
   })
 
-  it("no dispara un warning de React si se desmonta antes de que resuelva el fetch inicial", async () => {
+  it("no arrastra un reintento en curso a otra integración del mismo tenant", async () => {
+    const user = userEvent.setup()
+    const mercadoPago = makeIntegration({ id: "int-mp", name: "Mercado Pago", status: "failed" })
+    const andreani = makeIntegration({ id: "int-andreani", name: "Andreani", status: "failed" })
+    jest.mocked(api.getIntegrations).mockResolvedValue([mercadoPago, andreani])
+    let resolveRetry: (value: Integration) => void = () => {}
+    jest.mocked(api.retryIntegration).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRetry = resolve
+        }),
+    )
+
+    render(<Dashboard tenants={tenants} />)
+    await user.click(await screen.findByRole("button", { name: /Mercado Pago/i }))
+    await user.click(screen.getByRole("button", { name: "Reintentar" }))
+    expect(screen.getByRole("button", { name: "Reintentando…" })).toBeDisabled()
+
+    await user.click(screen.getByRole("button", { name: /Andreani/i }))
+    expect(screen.getByRole("button", { name: "Reintentar" })).toBeEnabled()
+
+    await act(async () => {
+      resolveRetry({ ...mercadoPago, status: "up_to_date" })
+    })
+  })
+
+  it("no dispara un warning de React si se desmonta antes de que resuelva el fetch de integraciones", async () => {
     const consoleError = jest.spyOn(console, "error").mockImplementation(() => {})
-    let resolveTenants: (value: Tenant[]) => void = () => {}
-    jest.mocked(api.getTenants).mockReturnValueOnce(
+    let resolveIntegrations: (value: Integration[]) => void = () => {}
+    jest.mocked(api.getIntegrations).mockReturnValueOnce(
       new Promise((resolve) => {
-        resolveTenants = resolve
+        resolveIntegrations = resolve
       }),
     )
 
-    const { unmount } = render(<Dashboard />)
+    const { unmount } = render(<Dashboard tenants={tenants} />)
     unmount()
 
     await act(async () => {
-      resolveTenants(tenants)
+      resolveIntegrations([makeIntegration()])
     })
 
     expect(consoleError).not.toHaveBeenCalled()
@@ -136,7 +173,7 @@ describe("Dashboard", () => {
       throw new Error("localStorage no disponible (modo privado)")
     })
 
-    render(<Dashboard />)
+    render(<Dashboard tenants={tenants} />)
 
     expect(await screen.findByRole("button", { name: /Aurora Retail/i })).toHaveAttribute(
       "aria-current",

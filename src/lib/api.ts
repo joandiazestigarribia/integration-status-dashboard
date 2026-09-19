@@ -7,13 +7,6 @@ import {
 import { rawErpByTenant, rawLogisticsByTenant, rawPaymentsByTenant, tenants } from "~/lib/mock-data"
 import type { Integration, Tenant } from "~/lib/types"
 
-/**
- * Capa de acceso a datos simulada. En una app real, esto sería una llamada
- * `fetch` a un backend (el tipo de servicio que mantiene un middleware de
- * integraciones); acá se simula latencia de red para que el resto del
- * front (loading states, skeletons) se comporte igual que con datos reales.
- */
-
 const NETWORK_DELAY_MS = 350
 
 function delay<T>(value: T, ms = NETWORK_DELAY_MS): Promise<T> {
@@ -39,11 +32,6 @@ export async function getIntegrations(tenantId: string): Promise<Integration[]> 
   )
 }
 
-/**
- * Simula reintentar una sincronización: dos de cada tres intentos
- * "resuelven" el problema. Devuelve la integración actualizada con un
- * evento nuevo al principio de la línea de tiempo.
- */
 export async function retryIntegration(integration: Integration): Promise<Integration> {
   const succeeds = Math.random() > 0.33
   const timestamp = new Date().toISOString()

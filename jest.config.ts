@@ -9,15 +9,6 @@ const config: Config = {
   moduleNameMapper: {
     "^~/(.*)$": "<rootDir>/src/$1",
   },
-  // Sin esto, `--coverage` solo mide los archivos que los tests importan, no
-  // todo `src`. Un archivo que ningún test toca no aparece 0% cubierto: no
-  // aparece directamente, y el número final termina siendo más alto de lo
-  // real (y distinto de lo que SonarCloud ve, que sí cruza sonar.sources
-  // contra el lcov entero).
-  //
-  // Quedan afuera solo los archivos sin lógica propia para testear: el shell
-  // de Next (layout/page) y el registro del service worker, que es un
-  // chequeo de soporte del navegador envuelto en try/catch silencioso.
   collectCoverageFrom: [
     "src/**/*.{ts,tsx}",
     "!src/**/*.d.ts",
