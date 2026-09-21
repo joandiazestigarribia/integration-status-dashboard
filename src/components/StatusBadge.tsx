@@ -3,17 +3,17 @@
 import { motion, AnimatePresence } from "framer-motion"
 import type { SyncStatus } from "~/lib/types"
 
-const STYLES: Record<SyncStatus, { label: string; dot: string; text: string }> = {
-  up_to_date: { label: "Al día", dot: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-400" },
-  retrying: { label: "Con reintentos", dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-400" },
-  failed: { label: "Con error", dot: "bg-red-500", text: "text-red-700 dark:text-red-400" },
+export const STATUS_STYLES: Record<SyncStatus, { label: string; dot: string; text: string }> = {
+  up_to_date: { label: "Al día", dot: "bg-ok", text: "text-ok" },
+  retrying: { label: "Con reintentos", dot: "bg-warn", text: "text-warn" },
+  failed: { label: "Con error", dot: "bg-fail", text: "text-fail" },
 }
 
 export function StatusBadge({ status }: { status: SyncStatus }) {
-  const style = STYLES[status]
+  const style = STATUS_STYLES[status]
 
   return (
-    <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${style.text}`}>
+    <span className={`inline-flex items-center gap-1.5 text-sm font-medium whitespace-nowrap ${style.text}`}>
       <AnimatePresence mode="wait" initial={false}>
         <motion.span
           key={status}

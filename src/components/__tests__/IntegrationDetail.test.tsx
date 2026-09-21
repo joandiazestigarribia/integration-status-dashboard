@@ -23,6 +23,13 @@ describe("IntegrationDetail", () => {
     expect(screen.getByText("reintentando")).toBeInTheDocument()
   })
 
+  it("muestra la última corrida y los registros sincronizados", () => {
+    render(<IntegrationDetail integration={{ ...integration, recordsSynced: 1284 }} onRetry={jest.fn()} />)
+
+    expect(screen.getByText("Última corrida")).toBeInTheDocument()
+    expect(screen.getByText("1.284")).toBeInTheDocument()
+  })
+
   it("deshabilita 'Reintentar' cuando la integración ya está al día", () => {
     render(<IntegrationDetail integration={{ ...integration, status: "up_to_date" }} onRetry={jest.fn()} />)
     expect(screen.getByRole("button", { name: "Reintentar" })).toBeDisabled()

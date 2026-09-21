@@ -1,6 +1,10 @@
 import type { Metadata, Viewport } from "next"
+import { Hanken_Grotesk, JetBrains_Mono } from "next/font/google"
 import { ServiceWorkerRegister } from "~/components/ServiceWorkerRegister"
 import "./globals.css"
+
+const sans = Hanken_Grotesk({ subsets: ["latin"], variable: "--font-sans-loaded" })
+const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono-loaded" })
 
 export const metadata: Metadata = {
   title: "Panel de sincronización",
@@ -18,7 +22,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="es" className="h-full antialiased">
+    <html lang="es" className={`${sans.variable} ${mono.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col font-sans">
         {children}
         <ServiceWorkerRegister />

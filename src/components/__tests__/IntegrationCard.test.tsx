@@ -15,12 +15,12 @@ const integration: Integration = {
 }
 
 describe("IntegrationCard", () => {
-  it("muestra el tipo, el nombre, el estado y la cantidad de registros", () => {
+  it("muestra el tipo, el nombre, el estado y la última corrida", () => {
     render(<IntegrationCard integration={integration} isSelected={false} onSelect={jest.fn()} />)
     expect(screen.getByText("Pagos")).toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "Mercado Pago" })).toBeInTheDocument()
     expect(screen.getByText("Al día")).toBeInTheDocument()
-    expect(screen.getByText("1.284 registros")).toBeInTheDocument()
+    expect(screen.getByText(/Última corrida/)).toBeInTheDocument()
   })
 
   it("llama a onSelect al clickear", async () => {

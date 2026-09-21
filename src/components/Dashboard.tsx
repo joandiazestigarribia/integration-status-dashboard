@@ -1,13 +1,17 @@
 "use client"
 
 import { useEffect, useState, useSyncExternalStore } from "react"
+import { MotionConfig } from "framer-motion"
 import { getIntegrations, retryIntegration } from "~/lib/api"
-import type { Integration, Tenant } from "~/lib/types"
+import type { Integration, SyncStatus, Tenant } from "~/lib/types"
 import { TenantSelector } from "~/components/TenantSelector"
+import { StatusSummary } from "~/components/StatusSummary"
 import { IntegrationCard } from "~/components/IntegrationCard"
 import { IntegrationDetail } from "~/components/IntegrationDetail"
 
 const LAST_TENANT_KEY = "integration-dashboard:last-tenant"
+
+const URGENCY: Record<SyncStatus, number> = { failed: 0, retrying: 1, up_to_date: 2 }
 
 interface DashboardProps {
   tenants: Tenant[]
@@ -32,7 +36,7 @@ export function Dashboard({ tenants }: DashboardProps) {
       if (!isCurrent) return
       setIntegrations(loaded)
       setIntegrationsTenantId(selectedTenantId)
-      setSelectedIntegrationId(null)
+      setSelectedIntegrationId(pickMostUrgent(loaded)?.id ?? null)
     })
 
     return () => {
@@ -56,53 +60,84 @@ export function Dashboard({ tenants }: DashboardProps) {
   const selectedIntegration = visibleIntegrations.find((item) => item.id === selectedIntegrationId) ?? null
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-10">
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-50">
-          Panel de sincronización
-        </h1>
-        <p className="mt-1 text-sm text-neutral-500">
-          Estado de las integraciones de pagos, logística y ERP por cliente.
-        </p>
-      </header>
+    <MotionConfig reducedMotion="user">
+      <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+        <header className="mb-8">
+          <h1 className="text-lg font-semibold tracking-tight">Panel de sincronización</h1>
+          <p className="text-muted mt-1 max-w-prose text-sm">
+            Estado de las integraciones de pagos, logística y ERP por cliente.
+          </p>
+        </header>
 
-      {tenants.length > 0 && selectedTenantId && (
-        <div className="mb-6">
-          <TenantSelector
-            tenants={tenants}
-            selectedTenantId={selectedTenantId}
-            onSelect={handleSelectTenant}
-          />
-        </div>
-      )}
-
-      <div className="grid gap-6 md:grid-cols-2">
-        <div className="space-y-3">
-          {isLoading && <p className="text-sm text-neutral-500">Cargando integraciones…</p>}
-          {!isLoading &&
-            visibleIntegrations.map((integration) => (
-              <IntegrationCard
-                key={integration.id}
-                integration={integration}
-                isSelected={integration.id === selectedIntegrationId}
-                onSelect={() => setSelectedIntegrationId(integration.id)}
-              />
-            ))}
-        </div>
-
-        <div>
-          {selectedIntegration ? (
-            <IntegrationDetail
-              key={selectedIntegration.id}
-              integration={selectedIntegration}
-              onRetry={handleRetry}
+        {tenants.length > 0 && selectedTenantId && (
+          <div className="mb-8">
+            <TenantSelector
+              tenants={tenants}
+              selectedTenantId={selectedTenantId}
+              onSelect={handleSelectTenant}
             />
-          ) : (
-            <p className="text-sm text-neutral-500">Elegí una integración para ver el detalle.</p>
-          )}
+          </div>
+        )}
+
+        <div className="mb-8">
+          <StatusSummary integrations={visibleIntegrations} isLoading={isLoading} />
+        </div>
+
+        <div className="grid gap-8 md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+          <div>
+            {isLoading && (
+              <>
+                <p className="sr-only">Cargando integraciones…</p>
+                <ul
+                  aria-hidden
+                  className="divide-line border-line divide-y overflow-hidden rounded-lg border"
+                >
+                  {[0, 1, 2].map((placeholder) => (
+                    <li key={placeholder} className="bg-surface h-[92px] p-4">
+                      <div className="bg-sunken h-4 w-40 max-w-full rounded-lg motion-safe:animate-pulse" />
+                      <div className="bg-sunken mt-2 h-3 w-16 rounded-lg motion-safe:animate-pulse" />
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {!isLoading && visibleIntegrations.length === 0 && (
+              <p className="text-muted text-sm">Este cliente todavía no tiene integraciones.</p>
+            )}
+            {!isLoading && visibleIntegrations.length > 0 && (
+              <ul className="divide-line border-line bg-surface divide-y overflow-hidden rounded-lg border">
+                {visibleIntegrations.map((integration) => (
+                  <li key={integration.id}>
+                    <IntegrationCard
+                      integration={integration}
+                      isSelected={integration.id === selectedIntegrationId}
+                      onSelect={() => setSelectedIntegrationId(integration.id)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="md:sticky md:top-6 md:self-start">
+            {selectedIntegration && (
+              <IntegrationDetail
+                key={selectedIntegration.id}
+                integration={selectedIntegration}
+                onRetry={handleRetry}
+              />
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </MotionConfig>
+  )
+}
+
+function pickMostUrgent(integrations: Integration[]): Integration | null {
+  return integrations.reduce<Integration | null>(
+    (most, item) => (most === null || URGENCY[item.status] < URGENCY[most.status] ? item : most),
+    null,
   )
 }
 

@@ -38,7 +38,7 @@ describe("Dashboard", () => {
     render(<Dashboard tenants={tenants} />)
 
     expect(screen.getByRole("button", { name: /Aurora Retail/i })).toHaveAttribute("aria-current", "true")
-    expect(await screen.findByText("Mercado Pago")).toBeInTheDocument()
+    expect(await screen.findByRole("heading", { name: "Mercado Pago", level: 3 })).toBeInTheDocument()
     expect(api.getIntegrations).toHaveBeenCalledTimes(1)
     expect(api.getIntegrations).toHaveBeenCalledWith("tenant-a")
   })
@@ -52,7 +52,7 @@ describe("Dashboard", () => {
       "aria-current",
       "true",
     )
-    expect(await screen.findByText("Mercado Pago")).toBeInTheDocument()
+    expect(await screen.findByRole("heading", { name: "Mercado Pago", level: 3 })).toBeInTheDocument()
     expect(api.getIntegrations).toHaveBeenCalledTimes(1)
     expect(api.getIntegrations).toHaveBeenCalledWith("tenant-b")
   })
@@ -63,7 +63,7 @@ describe("Dashboard", () => {
     render(<Dashboard tenants={tenants} />)
 
     expect(screen.getByRole("button", { name: /Aurora Retail/i })).toHaveAttribute("aria-current", "true")
-    expect(await screen.findByText("Mercado Pago")).toBeInTheDocument()
+    expect(await screen.findByRole("heading", { name: "Mercado Pago", level: 3 })).toBeInTheDocument()
   })
 
   it("guarda en localStorage el tenant que elige el usuario", async () => {
@@ -78,7 +78,7 @@ describe("Dashboard", () => {
   it("muestra un loading state mientras cambia de tenant, y lo saca al terminar", async () => {
     const user = userEvent.setup()
     render(<Dashboard tenants={tenants} />)
-    await screen.findByText("Mercado Pago")
+    await screen.findByRole("heading", { name: "Mercado Pago", level: 3 })
 
     let resolveSecond: (value: Integration[]) => void = () => {}
     jest.mocked(api.getIntegrations).mockImplementationOnce(
@@ -93,7 +93,7 @@ describe("Dashboard", () => {
 
     resolveSecond([makeIntegration({ id: "tenant-b-int", tenantId: "tenant-b", name: "Stripe" })])
 
-    expect(await screen.findByText("Stripe")).toBeInTheDocument()
+    expect(await screen.findByRole("heading", { name: "Stripe", level: 3 })).toBeInTheDocument()
     expect(screen.queryByText("Cargando integraciones…")).not.toBeInTheDocument()
   })
 
@@ -120,6 +120,45 @@ describe("Dashboard", () => {
     await user.click(screen.getByRole("button", { name: "Reintentar" }))
 
     expect(await screen.findByText("reintentando")).toBeInTheDocument()
+  })
+
+  it("abre el detalle de la integración más urgente sin que el usuario elija", async () => {
+    jest
+      .mocked(api.getIntegrations)
+      .mockResolvedValue([
+        makeIntegration({ id: "int-ok", name: "Mercado Pago", status: "up_to_date" }),
+        makeIntegration({ id: "int-retry", name: "Andreani", status: "retrying" }),
+        makeIntegration({ id: "int-fail", name: "SAP Business One", status: "failed" }),
+      ])
+
+    render(<Dashboard tenants={tenants} />)
+
+    expect(await screen.findByRole("heading", { name: "SAP Business One", level: 2 })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /SAP Business One/i })).toHaveAttribute("aria-pressed", "true")
+  })
+
+  it("mantiene abierta la integración después de reintentarla, aunque deje de ser la más urgente", async () => {
+    const user = userEvent.setup()
+    const failing = makeIntegration({ id: "int-fail", name: "Mercado Pago", status: "failed" })
+    const other = makeIntegration({ id: "int-other", name: "Andreani", status: "failed" })
+    jest.mocked(api.getIntegrations).mockResolvedValue([other, failing])
+    jest.mocked(api.retryIntegration).mockResolvedValue({ ...other, status: "up_to_date" })
+
+    render(<Dashboard tenants={tenants} />)
+    await screen.findByRole("heading", { name: "Andreani", level: 2 })
+    await user.click(screen.getByRole("button", { name: "Reintentar" }))
+
+    expect(await screen.findByRole("button", { name: "Reintentar" })).toBeDisabled()
+    expect(screen.getByRole("heading", { name: "Andreani", level: 2 })).toBeInTheDocument()
+  })
+
+  it("avisa cuando el cliente no tiene integraciones", async () => {
+    jest.mocked(api.getIntegrations).mockResolvedValue([])
+
+    render(<Dashboard tenants={tenants} />)
+
+    expect(await screen.findByText("Este cliente todavía no tiene integraciones.")).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { level: 2 })).not.toBeInTheDocument()
   })
 
   it("no arrastra un reintento en curso a otra integración del mismo tenant", async () => {
