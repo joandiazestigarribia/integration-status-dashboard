@@ -9,13 +9,7 @@ const config: Config = {
   moduleNameMapper: {
     "^~/(.*)$": "<rootDir>/src/$1",
   },
-  collectCoverageFrom: [
-    "src/**/*.{ts,tsx}",
-    "!src/**/*.d.ts",
-    "!src/app/layout.tsx",
-    "!src/app/page.tsx",
-    "!src/components/ServiceWorkerRegister.tsx",
-  ],
+  collectCoverageFrom: ["src/**/*.{ts,tsx}", "!src/**/*.d.ts", "!src/app/layout.tsx", "!src/app/page.tsx"],
 }
 
 export default createJestConfig(config)

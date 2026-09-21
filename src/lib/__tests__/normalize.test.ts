@@ -1,11 +1,13 @@
 import {
   normalizeErpIntegration,
   normalizeLogisticsIntegration,
+  normalizeMarketplaceIntegration,
   normalizePaymentsIntegration,
 } from "~/lib/adapters/normalize"
 import type {
   RawErpIntegration,
   RawLogisticsIntegration,
+  RawMarketplaceIntegration,
   RawPaymentsIntegration,
 } from "~/lib/adapters/raw-types"
 
@@ -93,5 +95,44 @@ describe("normalizeErpIntegration", () => {
       meta: { ...baseRaw.meta, healthy: true },
     })
     expect(result.status).toBe("up_to_date")
+  })
+})
+
+describe("normalizeMarketplaceIntegration", () => {
+  const raw: RawMarketplaceIntegration = {
+    seller_id: "int-4",
+    tenant_ref: "tenant-1",
+    marketplace: "Mercado Libre",
+    sync: { state: "throttled", last_sync_ms: 1_700_000_000_000, items_published: 42 },
+    activity: [{ at_ms: 1_700_000_000_000, state: "throttled", text: "límite de requests alcanzado" }],
+  }
+
+  it("mapea los campos propios del marketplace al modelo común", () => {
+    const result = normalizeMarketplaceIntegration(raw)
+
+    expect(result).toMatchObject({
+      id: "int-4",
+      tenantId: "tenant-1",
+      name: "Mercado Libre",
+      kind: "marketplace",
+      recordsSynced: 42,
+    })
+  })
+
+  it("convierte los milisegundos a ISO sin confundirlos con segundos", () => {
+    const result = normalizeMarketplaceIntegration(raw)
+
+    expect(result.lastSyncedAt).toBe(new Date(1_700_000_000_000).toISOString())
+    expect(result.events[0].timestamp).toBe(new Date(1_700_000_000_000).toISOString())
+  })
+
+  it.each([
+    ["synced", "up_to_date"],
+    ["throttled", "retrying"],
+    ["suspended", "failed"],
+  ] as const)("mapea el estado '%s' a '%s'", (state, expected) => {
+    const result = normalizeMarketplaceIntegration({ ...raw, sync: { ...raw.sync, state } })
+
+    expect(result.status).toBe(expected)
   })
 })

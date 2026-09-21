@@ -17,8 +17,13 @@ describe("getTenants", () => {
 })
 
 describe("getIntegrations", () => {
-  it("normaliza y junta las integraciones de pagos, logística y ERP de un tenant", async () => {
+  it("normaliza y junta las integraciones de pagos, logística, ERP y marketplace de un tenant", async () => {
     const integrations = await resolved(getIntegrations("tenant-aurora"), 500)
+    expect(integrations.map((i) => i.kind).sort()).toEqual(["erp", "logistics", "marketplace", "payments"])
+  })
+
+  it("no exige que todos los tenants tengan todos los tipos de integración", async () => {
+    const integrations = await resolved(getIntegrations("tenant-cedro"), 500)
     expect(integrations.map((i) => i.kind).sort()).toEqual(["erp", "logistics", "payments"])
   })
 

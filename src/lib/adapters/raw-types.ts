@@ -30,3 +30,15 @@ export interface RawErpIntegration {
   }
   runs: Array<{ when: string; healthy: boolean; hasPendingRetries: boolean; summary: string }>
 }
+
+export interface RawMarketplaceIntegration {
+  seller_id: string
+  tenant_ref: string
+  marketplace: string
+  sync: {
+    state: "synced" | "throttled" | "suspended"
+    last_sync_ms: number
+    items_published: number
+  }
+  activity: Array<{ at_ms: number; state: "synced" | "throttled" | "suspended"; text: string }>
+}

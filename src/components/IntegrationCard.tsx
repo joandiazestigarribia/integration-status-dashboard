@@ -6,6 +6,7 @@ const KIND_LABEL: Record<Integration["kind"], string> = {
   payments: "Pagos",
   logistics: "Logística",
   erp: "ERP",
+  marketplace: "Marketplace",
 }
 
 interface IntegrationCardProps {

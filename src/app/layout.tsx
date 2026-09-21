@@ -8,7 +8,7 @@ const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono-loaded"
 
 export const metadata: Metadata = {
   title: "Panel de sincronización",
-  description: "Estado de integraciones de pagos, logística y ERP por cliente",
+  description: "Estado de integraciones de pagos, logística, ERP y marketplaces por cliente",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: "/icon-192.png",

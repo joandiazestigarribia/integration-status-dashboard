@@ -2,6 +2,7 @@ import type { Integration, SyncEvent, SyncStatus } from "~/lib/types"
 import type {
   RawErpIntegration,
   RawLogisticsIntegration,
+  RawMarketplaceIntegration,
   RawPaymentsIntegration,
 } from "~/lib/adapters/raw-types"
 
@@ -59,6 +60,24 @@ export function normalizeErpIntegration(raw: RawErpIntegration): Integration {
   }
 }
 
+export function normalizeMarketplaceIntegration(raw: RawMarketplaceIntegration): Integration {
+  return {
+    id: raw.seller_id,
+    tenantId: raw.tenant_ref,
+    name: raw.marketplace,
+    kind: "marketplace",
+    status: mapMarketplaceStatus(raw.sync.state),
+    lastSyncedAt: new Date(raw.sync.last_sync_ms).toISOString(),
+    recordsSynced: raw.sync.items_published,
+    events: raw.activity.map((entry, index) => ({
+      id: `${raw.seller_id}-evt-${index}`,
+      timestamp: new Date(entry.at_ms).toISOString(),
+      status: mapMarketplaceStatus(entry.state),
+      message: entry.text,
+    })),
+  }
+}
+
 function mapPaymentsStatus(state: "ok" | "degraded" | "down"): SyncStatus {
   if (state === "ok") return "up_to_date"
   if (state === "degraded") return "retrying"
@@ -68,6 +87,12 @@ function mapPaymentsStatus(state: "ok" | "degraded" | "down"): SyncStatus {
 function mapLogisticsStatus(health: "connected" | "reconnecting" | "disconnected"): SyncStatus {
   if (health === "connected") return "up_to_date"
   if (health === "reconnecting") return "retrying"
+  return "failed"
+}
+
+function mapMarketplaceStatus(state: "synced" | "throttled" | "suspended"): SyncStatus {
+  if (state === "synced") return "up_to_date"
+  if (state === "throttled") return "retrying"
   return "failed"
 }
 

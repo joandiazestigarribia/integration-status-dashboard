@@ -65,7 +65,7 @@ export function Dashboard({ tenants }: DashboardProps) {
         <header className="mb-8">
           <h1 className="text-lg font-semibold tracking-tight">Panel de sincronización</h1>
           <p className="text-muted mt-1 max-w-prose text-sm">
-            Estado de las integraciones de pagos, logística y ERP por cliente.
+            Estado de las integraciones de pagos, logística, ERP y marketplaces por cliente.
           </p>
         </header>
 

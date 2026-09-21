@@ -1,10 +1,17 @@
 import {
   normalizeErpIntegration,
   normalizeLogisticsIntegration,
+  normalizeMarketplaceIntegration,
   normalizePaymentsIntegration,
   sortEventsDesc,
 } from "~/lib/adapters/normalize"
-import { rawErpByTenant, rawLogisticsByTenant, rawPaymentsByTenant, tenants } from "~/lib/mock-data"
+import {
+  rawErpByTenant,
+  rawLogisticsByTenant,
+  rawMarketplaceByTenant,
+  rawPaymentsByTenant,
+  tenants,
+} from "~/lib/mock-data"
 import type { Integration, Tenant } from "~/lib/types"
 
 const NETWORK_DELAY_MS = 350
@@ -21,11 +28,13 @@ export async function getIntegrations(tenantId: string): Promise<Integration[]> 
   const payments = rawPaymentsByTenant[tenantId]
   const logistics = rawLogisticsByTenant[tenantId]
   const erp = rawErpByTenant[tenantId]
+  const marketplace = rawMarketplaceByTenant[tenantId]
 
   const integrations: Integration[] = []
   if (payments) integrations.push(normalizePaymentsIntegration(payments))
   if (logistics) integrations.push(normalizeLogisticsIntegration(logistics))
   if (erp) integrations.push(normalizeErpIntegration(erp))
+  if (marketplace) integrations.push(normalizeMarketplaceIntegration(marketplace))
 
   return delay(
     integrations.map((integration) => ({ ...integration, events: sortEventsDesc(integration.events) })),

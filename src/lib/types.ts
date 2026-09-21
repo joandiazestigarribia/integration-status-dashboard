@@ -1,4 +1,4 @@
-export type IntegrationKind = "payments" | "logistics" | "erp"
+export type IntegrationKind = "payments" | "logistics" | "erp" | "marketplace"
 
 export type SyncStatus = "up_to_date" | "retrying" | "failed"
 

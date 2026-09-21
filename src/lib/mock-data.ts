@@ -1,6 +1,7 @@
 import type {
   RawErpIntegration,
   RawLogisticsIntegration,
+  RawMarketplaceIntegration,
   RawPaymentsIntegration,
 } from "~/lib/adapters/raw-types"
 import type { Tenant } from "~/lib/types"
@@ -14,6 +15,7 @@ export const tenants: Tenant[] = [
 const now = Date.now()
 const hoursAgo = (h: number) => Math.floor((now - h * 3_600_000) / 1000)
 const isoHoursAgo = (h: number) => new Date(now - h * 3_600_000).toISOString()
+const msHoursAgo = (h: number) => Math.floor(now - h * 3_600_000)
 
 export const rawPaymentsByTenant: Record<string, RawPaymentsIntegration> = {
   "tenant-aurora": {
@@ -139,5 +141,29 @@ export const rawErpByTenant: Record<string, RawErpIntegration> = {
         summary: "240 registros sincronizados",
       },
     ],
+  },
+}
+
+export const rawMarketplaceByTenant: Record<string, RawMarketplaceIntegration> = {
+  "tenant-aurora": {
+    seller_id: "aurora-marketplace",
+    tenant_ref: "tenant-aurora",
+    marketplace: "Mercado Libre",
+    sync: { state: "throttled", last_sync_ms: msHoursAgo(0.7), items_published: 3410 },
+    activity: [
+      {
+        at_ms: msHoursAgo(0.7),
+        state: "throttled",
+        text: "Límite de requests alcanzado, reintentando con espera",
+      },
+      { at_ms: msHoursAgo(3), state: "synced", text: "3410 publicaciones actualizadas" },
+    ],
+  },
+  "tenant-bravo": {
+    seller_id: "bravo-marketplace",
+    tenant_ref: "tenant-bravo",
+    marketplace: "Tiendanube",
+    sync: { state: "synced", last_sync_ms: msHoursAgo(0.4), items_published: 875 },
+    activity: [{ at_ms: msHoursAgo(0.4), state: "synced", text: "875 publicaciones actualizadas" }],
   },
 }

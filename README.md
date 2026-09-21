@@ -2,9 +2,9 @@
 
 ![CI](https://github.com/joandiazestigarribia/integration-status-dashboard/actions/workflows/ci.yml/badge.svg)
 
-Dashboard que muestra el estado de integraciones de **pagos, logística y ERP**
-por cliente (tenant), con reintentos, línea de tiempo de eventos, e
-instalable como PWA.
+Dashboard que muestra el estado de integraciones de **pagos, logística, ERP y
+marketplaces** por cliente (tenant), con reintentos, línea de tiempo de
+eventos, instalable como PWA y con soporte sin conexión.
 
 ## Por qué este proyecto
 
@@ -26,7 +26,7 @@ instalable como PWA.
 - Tailwind CSS
 - Framer Motion (transiciones de estado)
 - Jest + React Testing Library
-- PWA: manifest + service worker propio (sin librerías de por medio)
+- PWA: manifest + service worker propio con soporte offline (sin librerías de por medio)
 - CI: GitHub Actions (lint, typecheck, tests, SonarCloud, Trivy)
 
 ## Cómo correrlo
@@ -40,6 +40,16 @@ afecta al funcionamiento.
 npm install
 npm run dev       # http://localhost:3000
 ```
+
+Para probar el modo sin conexión hay que usar el build de producción (en
+`npm run dev` el service worker se desregistra a propósito):
+
+```bash
+npm run build && npm start   # http://localhost:3000
+```
+
+Después, en DevTools: Application, Service Workers (debe figurar activo),
+Network en "Offline" y recargar. Lighthouse también audita la PWA.
 
 Otros scripts:
 
@@ -73,8 +83,31 @@ src/
 - **Adapter pattern en `lib/adapters`**, no en los componentes. Cada
   integración real (una pasarela de pagos, un carrier, un ERP) devuelve datos
   con su propia forma; normalizarlos en un solo lugar es lo que evita que esa
-  diferencia se filtre a la UI. Agregar una cuarta integración es agregar un
-  adapter, no tocar el dashboard.
+  diferencia se filtre a la UI. Hoy hay cuatro (pagos, logística, ERP y
+  marketplace, cada una con una forma cruda distinta): sumar otra es escribir
+  su adapter y su forma cruda, sin tocar la lógica del dashboard. El
+  marketplace se agregó exactamente así, y TypeScript obliga a darle una
+  etiqueta en la UI porque el mapa de tipos es exhaustivo.
+- **Los tenants se cargan en el servidor y las integraciones en el cliente.**
+  `app/page.tsx` es un Server Component que pide la lista de tenants (estable)
+  y se la pasa a `Dashboard` por props, así el cliente no espera un fetch
+  previo para poder pedir las integraciones (antes eran dos en serie). Las
+  integraciones no se renderizan en el servidor a propósito: son el dato
+  volátil, y prerenderizarlas congelaría sus timestamps en el momento del
+  build y desalinearía las fechas entre la zona horaria del servidor y la del
+  navegador (hydration mismatch). Con una API real, el paso siguiente sería
+  pedirlas en el servidor con `revalidate` y un `Suspense` para hacer
+  streaming del resto de la página.
+- **Modo offline con una estrategia por tipo de recurso** (`public/sw.js`). El
+  HTML y el manifest van con red primero, para no servir nunca una build
+  vieja estando online, y caen al caché solo sin conexión. Los archivos de
+  `/_next/static` llevan hash en el nombre y nunca cambian, así que van con
+  caché primero, con un tope de entradas que descarta primero los de builds
+  viejas (sin tope crecerían sin límite entre deploys). Al instalarse, el
+  service worker baja los assets que lista el HTML, porque la primera visita
+  los pide antes de que él controle la página. En desarrollo se desregistra:
+  con chunks que cambian en cada edición, un caché primero dejaría el código
+  viejo.
 - **Loading state derivado, no seteado a mano.** `Dashboard.tsx` no hace
   `setIsLoading(true)` al arrancar un efecto (dispara renders en cascada
   innecesarios); en cambio compara el tenant seleccionado contra el tenant al
@@ -88,10 +121,6 @@ src/
   contrato no aplicaba. Declarar el rol sin implementarlo completo es peor
   que no declararlo: un lector de pantalla anuncia un comportamiento que
   después no está.
-- **El service worker solo cachea el app shell** (`/`, el manifest y los
-  íconos), no cualquier GET del mismo origen. Cachear todo hacía que el
-  caché creciera sin límite entre builds, porque nada podaba las entradas
-  viejas dentro de un mismo `CACHE_NAME`.
 
 ## Qué NO hice, y por qué
 
@@ -105,6 +134,12 @@ pasarme del alcance de un proyecto pequeño.
   sincronización con una promesa que resuelve en ~700ms; no hay RabbitMQ ni
   nada parecido detrás. La arquitectura (adapter + estado por evento) es la
   misma que necesitaría una integración real; el transporte no lo es.
+- **Sin persistencia del último estado conocido.** El panel funciona sin
+  conexión porque los datos son un mock que viaja dentro del bundle, no
+  porque se guarden respuestas. Con una API real habría que cachear esas
+  respuestas (stale-while-revalidate en el service worker, o una copia local
+  por tenant) y mostrar de cuándo son; el punto de cambio es `lib/api.ts`.
+  Simularlo hoy sería inventar un camino de código que nada ejercita.
 - **Sin autenticación.** No hay usuarios ni permisos: el selector de tenant
   es solo de front, no hay multi-tenancy real de datos ni de acceso.
 - **Sin microservicios.** Todo vive en una sola app Next.js. Separar esto en
