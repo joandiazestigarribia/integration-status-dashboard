@@ -1,5 +1,6 @@
-const SHELL_CACHE = "shell-v2"
-const STATIC_CACHE = "static-v2"
+const SHELL_CACHE = "shell-v3"
+const STATIC_CACHE = "static-v3"
+const API_CACHE = "api-v1"
 const MAX_STATIC_ENTRIES = 80
 const SHELL_ASSETS = ["/manifest.webmanifest", "/icon-192.png", "/icon-512.png"]
 const PRECACHE = ["/", ...SHELL_ASSETS]
@@ -12,6 +13,14 @@ async function precache() {
   const assets = [...new Set(html.match(STATIC_URL) ?? [])]
   const statics = await caches.open(STATIC_CACHE)
   await Promise.allSettled(assets.map((url) => statics.add(url)))
+  await trimCache(statics, MAX_STATIC_ENTRIES)
+}
+
+async function trimCache(cache, maxEntries) {
+  const keys = await cache.keys()
+  const excess = keys.length - maxEntries
+  if (excess <= 0) return
+  await Promise.all(keys.slice(0, excess).map((key) => cache.delete(key)))
 }
 
 async function networkFirst(request, cacheName, cacheKey = request) {
@@ -33,10 +42,7 @@ async function cacheFirst(request) {
   const response = await fetch(request)
   if (response.ok) {
     await cache.put(request, response.clone())
-    const keys = await cache.keys()
-    await Promise.all(
-      keys.slice(0, Math.max(0, keys.length - MAX_STATIC_ENTRIES)).map((key) => cache.delete(key)),
-    )
+    await trimCache(cache, MAX_STATIC_ENTRIES)
   }
   return response
 }
@@ -46,13 +52,12 @@ self.addEventListener("install", (event) => {
 })
 
 self.addEventListener("activate", (event) => {
+  const current = [SHELL_CACHE, STATIC_CACHE, API_CACHE]
   event.waitUntil(
     caches
       .keys()
       .then((keys) =>
-        Promise.all(
-          keys.filter((key) => key !== SHELL_CACHE && key !== STATIC_CACHE).map((key) => caches.delete(key)),
-        ),
+        Promise.all(keys.filter((key) => !current.includes(key)).map((key) => caches.delete(key))),
       )
       .then(() => self.clients.claim()),
   )
@@ -67,6 +72,8 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(networkFirst(request, SHELL_CACHE, "/"))
   } else if (SHELL_ASSETS.includes(url.pathname)) {
     event.respondWith(networkFirst(request, SHELL_CACHE))
+  } else if (url.pathname.startsWith("/api/")) {
+    event.respondWith(networkFirst(request, API_CACHE))
   } else if (url.pathname.startsWith("/_next/static/")) {
     event.respondWith(cacheFirst(request))
   }

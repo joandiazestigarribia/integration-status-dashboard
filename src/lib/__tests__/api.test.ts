@@ -1,76 +1,105 @@
-import { getIntegrations, getTenants, retryIntegration } from "~/lib/api"
+import { getIntegrations, retryIntegration } from "~/lib/api"
+import { ApiError } from "~/lib/http"
 import type { Integration } from "~/lib/types"
 
-beforeEach(() => jest.useFakeTimers())
-afterEach(() => jest.useRealTimers())
+const fetchMock = jest.fn()
 
-async function resolved<T>(promise: Promise<T>, ms: number): Promise<T> {
-  await jest.advanceTimersByTimeAsync(ms)
-  return promise
+function jsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+    headers: { get: (name: string) => headers[name.toLowerCase()] ?? null },
+  } as unknown as Response
 }
 
-describe("getTenants", () => {
-  it("devuelve los tenants mockeados", async () => {
-    const tenants = await resolved(getTenants(), 500)
-    expect(tenants.map((t) => t.id)).toEqual(["tenant-aurora", "tenant-bravo", "tenant-cedro"])
-  })
+const integration: Integration = {
+  id: "aurora-payments",
+  tenantId: "tenant-aurora",
+  name: "Mercado Pago",
+  kind: "payments",
+  status: "retrying",
+  lastSyncedAt: "2026-01-01T00:00:00.000Z",
+  recordsSynced: 10,
+  events: [],
+}
+
+beforeEach(() => {
+  fetchMock.mockReset()
+  global.fetch = fetchMock as unknown as typeof fetch
 })
 
 describe("getIntegrations", () => {
-  it("normaliza y junta las integraciones de pagos, logística, ERP y marketplace de un tenant", async () => {
-    const integrations = await resolved(getIntegrations("tenant-aurora"), 500)
-    expect(integrations.map((i) => i.kind).sort()).toEqual(["erp", "logistics", "marketplace", "payments"])
+  it("pide las integraciones del tenant por HTTP", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse([integration], 200, { "x-fetched-at": "2026-01-02T00:00:00.000Z" }),
+    )
+
+    const result = await getIntegrations("tenant-aurora")
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/integrations/tenant-aurora",
+      expect.objectContaining({ method: "GET" }),
+    )
+    expect(result.integrations).toEqual([integration])
+    expect(result.fetchedAt).toBe("2026-01-02T00:00:00.000Z")
   })
 
-  it("no exige que todos los tenants tengan todos los tipos de integración", async () => {
-    const integrations = await resolved(getIntegrations("tenant-cedro"), 500)
-    expect(integrations.map((i) => i.kind).sort()).toEqual(["erp", "logistics", "payments"])
+  it("escapa el id del tenant en la URL", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse([]))
+
+    await getIntegrations("tenant/../otro")
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/integrations/tenant%2F..%2Fotro",
+      expect.objectContaining({ method: "GET" }),
+    )
   })
 
-  it("ordena los eventos de cada integración de más nuevo a más viejo", async () => {
-    const [integration] = await resolved(getIntegrations("tenant-aurora"), 500)
-    const timestamps = integration.events.map((e) => new Date(e.timestamp).getTime())
-    expect(timestamps).toEqual([...timestamps].sort((a, b) => b - a))
+  it("devuelve fetchedAt null si el servidor no manda la marca", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse([integration]))
+
+    const result = await getIntegrations("tenant-aurora")
+
+    expect(result.fetchedAt).toBeNull()
   })
 
-  it("devuelve una lista vacía para un tenant sin datos", async () => {
-    const integrations = await resolved(getIntegrations("tenant-inexistente"), 500)
-    expect(integrations).toEqual([])
+  it("propaga la señal de cancelación al fetch", async () => {
+    const controller = new AbortController()
+    fetchMock.mockResolvedValueOnce(jsonResponse([]))
+
+    await getIntegrations("tenant-aurora", { signal: controller.signal })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/integrations/tenant-aurora",
+      expect.objectContaining({ signal: controller.signal }),
+    )
+  })
+
+  it("lanza ApiError si el tenant no existe", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: "Cliente no encontrado" }, 404))
+
+    await expect(getIntegrations("tenant-inexistente")).rejects.toBeInstanceOf(ApiError)
   })
 })
 
 describe("retryIntegration", () => {
-  const base: Integration = {
-    id: "int-1",
-    tenantId: "tenant-1",
-    name: "Integración de prueba",
-    kind: "payments",
-    status: "retrying",
-    lastSyncedAt: "2026-01-01T00:00:00.000Z",
-    recordsSynced: 10,
-    events: [{ id: "evt-0", timestamp: "2025-12-31T00:00:00.000Z", status: "retrying", message: "previo" }],
-  }
+  it("hace POST al endpoint de reintento con el estado actual de la integración", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ...integration, status: "up_to_date" }))
 
-  afterEach(() => jest.spyOn(Math, "random").mockRestore())
+    const updated = await retryIntegration(integration)
 
-  it("cuando el reintento resuelve, pasa a up_to_date y agrega un evento nuevo al principio", async () => {
-    jest.spyOn(Math, "random").mockReturnValue(0.9)
-
-    const updated = await resolved(retryIntegration(base), 1000)
-
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/integrations/tenant-aurora/aurora-payments/retry",
+      expect.objectContaining({ method: "POST", body: JSON.stringify(integration) }),
+    )
     expect(updated.status).toBe("up_to_date")
-    expect(updated.events[0].message).toBe("Reintento exitoso")
-    expect(updated.events).toHaveLength(base.events.length + 1)
-    expect(updated.lastSyncedAt).not.toBe(base.lastSyncedAt)
   })
 
-  it("cuando el reintento no resuelve, se mantiene en retrying y no toca lastSyncedAt", async () => {
-    jest.spyOn(Math, "random").mockReturnValue(0.1)
+  it("no reintenta el POST si el servidor rechaza el cuerpo", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ error: "Cuerpo inválido" }, 400))
 
-    const updated = await resolved(retryIntegration(base), 1000)
-
-    expect(updated.status).toBe("retrying")
-    expect(updated.events[0].message).toBe("Reintento en curso, todavía sin confirmación")
-    expect(updated.lastSyncedAt).toBe(base.lastSyncedAt)
+    await expect(retryIntegration(integration)).rejects.toMatchObject({ status: 400 })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

@@ -4,8 +4,9 @@ import vm from "node:vm"
 
 const ORIGIN = "https://app.test"
 const SW_SOURCE = fs.readFileSync(path.join(process.cwd(), "public", "sw.js"), "utf8")
-const SHELL = "shell-v2"
-const STATIC = "static-v2"
+const SHELL = "shell-v3"
+const STATIC = "static-v3"
+const API = "api-v1"
 
 interface FakeResponse {
   ok: boolean
@@ -183,6 +184,26 @@ describe("service worker", () => {
 
       await expect(sw.lifecycle("install")).rejects.toThrow()
     })
+
+    it("no deja que el precache supere el tope de assets estáticos", async () => {
+      const sw = setup()
+      const html = Array.from(
+        { length: 85 },
+        (_, index) => `<script src="/_next/static/chunks/c${index}.js"></script>`,
+      ).join("")
+      sw.route("/", makeResponse(html))
+      sw.route("/manifest.webmanifest", makeResponse("manifest"))
+      sw.route("/icon-192.png", makeResponse("icon"))
+      sw.route("/icon-512.png", makeResponse("icon"))
+      for (let index = 0; index < 85; index++) {
+        sw.route(`/_next/static/chunks/c${index}.js`, makeResponse(`c${index}`))
+      }
+
+      await sw.lifecycle("install")
+
+      const statics = await sw.caches.open(STATIC)
+      expect(statics.entries.size).toBe(80)
+    })
   })
 
   describe("activate", () => {
@@ -307,12 +328,69 @@ describe("service worker", () => {
   describe("pedidos que no maneja", () => {
     it.each([
       ["un método distinto de GET", "/_next/static/chunks/main.js", { method: "POST" }],
-      ["una ruta que no es del shell ni estática", "/api/integraciones", {}],
+      ["una ruta que no es del shell, ni estática, ni del API", "/otra-ruta", {}],
       ["un pedido a otro origen", "https://otro.test/_next/static/chunks/main.js", {}],
     ])("ignora %s", (_label, url, init) => {
       const sw = setup()
 
       expect(sw.request(url, init)).toBeUndefined()
+    })
+  })
+
+  describe("API por cliente", () => {
+    const urlA = "/api/integrations/tenant-a"
+    const urlB = "/api/integrations/tenant-b"
+
+    it("con red devuelve la respuesta y la guarda para el modo offline", async () => {
+      const sw = setup()
+      const fresh = makeResponse("integraciones de A")
+      sw.route(urlA, fresh)
+
+      const response = await sw.request(urlA)
+
+      expect(response).toBe(fresh)
+      expect((await (await sw.caches.open(API)).match(urlA))?.body).toBe("integraciones de A")
+    })
+
+    it("sin conexión devuelve el último estado guardado", async () => {
+      const sw = setup()
+      const saved = makeResponse("integraciones guardadas de A")
+      await (await sw.caches.open(API)).put(urlA, saved)
+      sw.network.offline = true
+
+      expect(await sw.request(urlA)).toBe(saved)
+    })
+
+    it("sin conexión y sin copia guardada devuelve un error de red", async () => {
+      const sw = setup()
+      sw.network.offline = true
+
+      expect(await sw.request(urlA)).toBe(NETWORK_ERROR)
+    })
+
+    it("mantiene el estado de cada cliente por separado", async () => {
+      const sw = setup()
+      await (await sw.caches.open(API)).put(urlA, makeResponse("estado de A"))
+      await (await sw.caches.open(API)).put(urlB, makeResponse("estado de B"))
+      sw.network.offline = true
+
+      expect((await sw.request(urlA))?.body).toBe("estado de A")
+      expect((await sw.request(urlB))?.body).toBe("estado de B")
+    })
+
+    it("no guarda respuestas de error del servidor", async () => {
+      const sw = setup()
+      sw.route(urlA, makeResponse("boom", false))
+
+      await sw.request(urlA)
+
+      expect(await (await sw.caches.open(API)).match(urlA)).toBeUndefined()
+    })
+
+    it("no intercepta un POST al API", () => {
+      const sw = setup()
+
+      expect(sw.request(urlA, { method: "POST" })).toBeUndefined()
     })
   })
 })

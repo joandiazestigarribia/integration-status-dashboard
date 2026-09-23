@@ -12,7 +12,7 @@ export interface RawLogisticsIntegration {
   id: string
   tenantId: string
   carrierName: string
-  lastUpdate: string // ISO
+  lastUpdate: string
   shipmentsProcessed: number
   connectionHealth: "connected" | "reconnecting" | "disconnected"
   history: Array<{ at: string; health: "connected" | "reconnecting" | "disconnected"; note: string }>

@@ -4,7 +4,7 @@ export type SyncStatus = "up_to_date" | "retrying" | "failed"
 
 export interface SyncEvent {
   id: string
-  timestamp: string // ISO 8601
+  timestamp: string
   status: SyncStatus
   message: string
 }
@@ -15,7 +15,7 @@ export interface Integration {
   name: string
   kind: IntegrationKind
   status: SyncStatus
-  lastSyncedAt: string // ISO 8601
+  lastSyncedAt: string
   recordsSynced: number
   events: SyncEvent[]
 }

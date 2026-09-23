@@ -1,8 +1,8 @@
 import { Dashboard } from "~/components/Dashboard"
-import { getTenants } from "~/lib/api"
+import { listTenants } from "~/lib/server/data"
 
-export default async function Home() {
-  const tenants = await getTenants()
+export default function Home() {
+  const tenants = listTenants()
 
   return <Dashboard tenants={tenants} />
 }

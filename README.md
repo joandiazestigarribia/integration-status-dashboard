@@ -23,10 +23,11 @@ eventos, instalable como PWA y con soporte sin conexión.
 ## Stack
 
 - Next.js (App Router) + TypeScript
+- API propia con route handlers de Next: el cliente consume los datos por HTTP, no por imports
 - Tailwind CSS
 - Framer Motion (transiciones de estado)
 - Jest + React Testing Library
-- PWA: manifest + service worker propio con soporte offline (sin librerías de por medio)
+- PWA: manifest + service worker propio con soporte offline real por cliente (sin librerías de por medio)
 - CI: GitHub Actions (lint, typecheck, tests, SonarCloud, Trivy)
 
 ## Cómo correrlo
@@ -67,15 +68,22 @@ npm run format       # Prettier (con el plugin de Tailwind)
 
 ```
 src/
-  app/                  → App Router (layout, page)
-  components/           → UI (todas las piezas que arma el dashboard)
+  app/
+    api/                  → route handlers: la API REST que consume el cliente
+    error.tsx             → límite de error del segmento raíz
+    not-found.tsx         → 404 propio
+    layout.tsx, page.tsx  → App Router (el page lee los tenants en el servidor)
+  components/            → UI (todas las piezas que arma el dashboard)
   lib/
-    types.ts            → modelo de dominio normalizado
+    types.ts             → modelo de dominio normalizado
     adapters/
-      raw-types.ts       → formas "crudas" simuladas, una por integración
-      normalize.ts        → adapters que las convierten al modelo común
-    mock-data.ts          → datos de ejemplo por tenant
-    api.ts                 → capa de acceso a datos (simula latencia y reintentos)
+      raw-types.ts        → formas "crudas" simuladas, una por integración
+      normalize.ts         → adapters que las convierten al modelo común
+    server/data.ts        → el "backend": lee los mocks y los normaliza (sólo servidor)
+    http.ts               → transporte: ApiError, reintentos con backoff, cancelación
+    api.ts                → cliente REST que usa el dashboard (fetch a /api)
+    use-online-status.ts  → hook de estado de conexión
+    mock-data.ts           → datos de ejemplo por tenant
 ```
 
 ## Decisiones de arquitectura
@@ -88,26 +96,50 @@ src/
   su adapter y su forma cruda, sin tocar la lógica del dashboard. El
   marketplace se agregó exactamente así, y TypeScript obliga a darle una
   etiqueta en la UI porque el mapa de tipos es exhaustivo.
-- **Los tenants se cargan en el servidor y las integraciones en el cliente.**
-  `app/page.tsx` es un Server Component que pide la lista de tenants (estable)
-  y se la pasa a `Dashboard` por props, así el cliente no espera un fetch
-  previo para poder pedir las integraciones (antes eran dos en serie). Las
-  integraciones no se renderizan en el servidor a propósito: son el dato
-  volátil, y prerenderizarlas congelaría sus timestamps en el momento del
-  build y desalinearía las fechas entre la zona horaria del servidor y la del
-  navegador (hydration mismatch). Con una API real, el paso siguiente sería
-  pedirlas en el servidor con `revalidate` y un `Suspense` para hacer
-  streaming del resto de la página.
+- **Los tenants se cargan en el servidor y las integraciones por HTTP.**
+  `app/page.tsx` es un Server Component que lee la lista de tenants (estable)
+  directo del módulo de datos —sin pasar por HTTP— y se la pasa a `Dashboard`
+  por props, así el cliente no espera un fetch previo para poder pedir las
+  integraciones (antes eran dos en serie). Las integraciones, que son el dato
+  volátil, el cliente las pide por HTTP a los route handlers de `app/api`; no
+  se renderizan en el servidor a propósito porque prerenderizarlas congelaría
+  sus timestamps en el momento del build y desalinearía las fechas entre la
+  zona horaria del servidor y la del navegador (hydration mismatch). El paso
+  siguiente sería pedirlas también en el servidor con `revalidate` y un
+  `Suspense` para hacer streaming del resto de la página.
+- **El cliente consume una REST, no importa mocks.** `lib/api.ts` sólo conoce
+  URLs y tipos; `lib/http.ts` centraliza el transporte: errores tipados con
+  `ApiError`, reintentos con backoff sólo para fallos transitorios (red, 5xx, 429) y cancelación por `AbortSignal` al cambiar de cliente. El servidor
+  marca cada respuesta con `x-fetched-at`, y el dashboard muestra "estado
+  actualizado hace X": cuando la respuesta sale del caché del service worker,
+  esa marca es la del momento en que se bajó, así el usuario sabe de cuándo
+  son los datos que está viendo. Sin conexión, aparece un aviso (`useOnlineStatus`).
+- **Mutaciones por route handler, no por Server Action.** La guía de Next
+  prefiere Server Actions para mutaciones disparadas desde la UI; acá el
+  reintento es un `POST` a un route handler a propósito, porque el objetivo es
+  demostrar el consumo de una REST (métodos, códigos de estado, errores y
+  reintentos) y porque el service worker necesita una URL real para cachear el
+  `GET` por cliente. Un Server Action es más idiomático para la mutación, pero
+  no se puede consumir desde afuera ni cachear; con una API externa de verdad,
+  el route handler es el camino.
+- **`error.tsx` + `not-found.tsx`.** El App Router trae límites de error y 404
+  por segmento; se agregaron para no caer en las pantallas genéricas de Next y
+  mantener el idioma y el estilo del panel. `/api/health` cubre el health check
+  del checklist de self-hosting.
 - **Modo offline con una estrategia por tipo de recurso** (`public/sw.js`). El
   HTML y el manifest van con red primero, para no servir nunca una build
-  vieja estando online, y caen al caché solo sin conexión. Los archivos de
+  vieja estando online, y caen al caché solo sin conexión. Las respuestas de
+  `/api` también van con red primero, pero se cachean por URL: como la URL
+  incluye el cliente, cada tenant guarda su propio último estado conocido y el
+  panel sigue mostrando datos reales sin conexión. Los archivos de
   `/_next/static` llevan hash en el nombre y nunca cambian, así que van con
   caché primero, con un tope de entradas que descarta primero los de builds
-  viejas (sin tope crecerían sin límite entre deploys). Al instalarse, el
-  service worker baja los assets que lista el HTML, porque la primera visita
-  los pide antes de que él controle la página. En desarrollo se desregistra:
-  con chunks que cambian en cada edición, un caché primero dejaría el código
-  viejo.
+  viejas (sin tope crecerían sin límite entre deploys). Ese mismo tope se
+  aplica al precache de la instalación, no sólo a las respuestas nuevas. Al
+  instalarse, el service worker baja los assets que lista el HTML, porque la
+  primera visita los pide antes de que él controle la página. En desarrollo se
+  desregistra: con chunks que cambian en cada edición, un caché primero
+  dejaría el código viejo.
 - **Loading state derivado, no seteado a mano.** `Dashboard.tsx` no hace
   `setIsLoading(true)` al arrancar un efecto (dispara renders en cascada
   innecesarios); en cambio compara el tenant seleccionado contra el tenant al
@@ -127,30 +159,31 @@ src/
 Ninguna de estas es una omisión accidental: cada una quedó afuera para no
 pasarme del alcance de un proyecto pequeño.
 
-- **Sin backend ni base de datos real.** Los datos viven en memoria
-  (`lib/mock-data.ts`) y la "API" (`lib/api.ts`) solo simula latencia de red.
-  Un backend real sería otro proyecto entero.
+- **Sin backend ni base de datos real.** Los route handlers de `app/api` leen
+  los mocks en memoria (`lib/server/data.ts`) y los normalizan; no hay base de
+  datos ni estado compartido entre instancias. Por eso el reintento no persiste
+  en el servidor: el cliente manda el estado que conoce y el servidor lo
+  transforma. Con un backend real, el servidor sería el dueño del estado. Un
+  backend de verdad sería otro proyecto entero.
 - **Sin colas ni workers reales.** El botón "Reintentar" simula una
   sincronización con una promesa que resuelve en ~700ms; no hay RabbitMQ ni
   nada parecido detrás. La arquitectura (adapter + estado por evento) es la
   misma que necesitaría una integración real; el transporte no lo es.
-- **Sin persistencia del último estado conocido.** El panel funciona sin
-  conexión porque los datos son un mock que viaja dentro del bundle, no
-  porque se guarden respuestas. Con una API real habría que cachear esas
-  respuestas (stale-while-revalidate en el service worker, o una copia local
-  por tenant) y mostrar de cuándo son; el punto de cambio es `lib/api.ts`.
-  Simularlo hoy sería inventar un camino de código que nada ejercita.
+- **Sin paginado.** Las integraciones de un cliente son pocas y entran en una
+  sola respuesta; paginar una lista de cuatro sería inventar complejidad. La
+  capa HTTP igual está lista para agregarlo (query params + `next`/`cursor`)
+  el día que una integración real devuelva miles de eventos.
 - **Sin autenticación.** No hay usuarios ni permisos: el selector de tenant
   es solo de front, no hay multi-tenancy real de datos ni de acceso.
 - **Sin microservicios.** Todo vive en una sola app Next.js. Separar esto en
   servicios sería sobre-ingeniería para lo que este proyecto necesita
   demostrar.
-- **Sin manejo de error de red real en el reintento.** `retryIntegration`
-  está mockeada para resolver siempre (varía el resultado de negocio, nunca
-  la promesa), así que no hay hoy una falla de conexión real que probar. El
-  código igual no asume que nunca va a pasar: `IntegrationDetail` atrapa un
-  eventual rechazo y muestra un error en vez de perderlo en silencio, pero
-  no hay un caso mockeado que lo dispare.
+- **Sin fallas de red provocadas a propósito.** El transporte reintenta con
+  backoff y la UI muestra un error con botón para recargar si algo falla
+  (`ApiError` en `lib/http.ts`, panel de error en `Dashboard`), pero los route
+  handlers mockeados nunca devuelven 5xx: ese camino se ejercita en los tests,
+  no en la demo. Provocarlo en runtime sería inventar un caso que el mock no
+  tiene.
 - **SonarCloud está en el pipeline pero requiere configuración propia** (un
   `SONAR_TOKEN` y una organización de SonarCloud): el workflow saltea ese
   paso si no hay token, en vez de romper el CI de quien clone el repo. Trivy

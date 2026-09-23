@@ -8,6 +8,8 @@ import { TenantSelector } from "~/components/TenantSelector"
 import { StatusSummary } from "~/components/StatusSummary"
 import { IntegrationCard } from "~/components/IntegrationCard"
 import { IntegrationDetail } from "~/components/IntegrationDetail"
+import { formatTimeAgo } from "~/lib/format"
+import { useOnlineStatus } from "~/lib/use-online-status"
 
 const LAST_TENANT_KEY = "integration-dashboard:last-tenant"
 
@@ -26,26 +28,38 @@ export function Dashboard({ tenants }: DashboardProps) {
   const selectedTenantId = chosenTenantId ?? fallbackTenantId
   const [integrations, setIntegrations] = useState<Integration[]>([])
   const [integrationsTenantId, setIntegrationsTenantId] = useState<string | null>(null)
+  const [fetchedAt, setFetchedAt] = useState<string | null>(null)
   const [selectedIntegrationId, setSelectedIntegrationId] = useState<string | null>(null)
+  const [loadFailure, setLoadFailure] = useState<{ tenantId: string; token: number } | null>(null)
+  const [reloadToken, setReloadToken] = useState(0)
+  const isOnline = useOnlineStatus()
 
   useEffect(() => {
     if (!selectedTenantId) return
-    let isCurrent = true
+    const controller = new AbortController()
 
-    getIntegrations(selectedTenantId).then((loaded) => {
-      if (!isCurrent) return
-      setIntegrations(loaded)
-      setIntegrationsTenantId(selectedTenantId)
-      setSelectedIntegrationId(pickMostUrgent(loaded)?.id ?? null)
-    })
+    getIntegrations(selectedTenantId, { signal: controller.signal })
+      .then(({ integrations: loaded, fetchedAt: loadedAt }) => {
+        if (controller.signal.aborted) return
+        setLoadFailure(null)
+        setIntegrations(loaded)
+        setIntegrationsTenantId(selectedTenantId)
+        setFetchedAt(loadedAt)
+        setSelectedIntegrationId(pickMostUrgent(loaded)?.id ?? null)
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return
+        setLoadFailure({ tenantId: selectedTenantId, token: reloadToken })
+      })
 
-    return () => {
-      isCurrent = false
-    }
-  }, [selectedTenantId])
+    return () => controller.abort()
+  }, [selectedTenantId, reloadToken])
 
   const isLoading = selectedTenantId !== null && selectedTenantId !== integrationsTenantId
+  const hasError =
+    loadFailure !== null && loadFailure.tenantId === selectedTenantId && loadFailure.token === reloadToken
   const visibleIntegrations = isLoading ? [] : integrations
+  const freshnessLabel = !isLoading && !hasError && fetchedAt ? formatTimeAgo(fetchedAt) : null
 
   function handleSelectTenant(tenantId: string) {
     safeWriteLastTenant(tenantId)
@@ -69,6 +83,15 @@ export function Dashboard({ tenants }: DashboardProps) {
           </p>
         </header>
 
+        {!isOnline && (
+          <p
+            role="status"
+            className="border-line bg-sunken text-muted mb-8 rounded-lg border px-4 py-2 text-sm"
+          >
+            Sin conexión: estás viendo el último estado guardado de cada integración.
+          </p>
+        )}
+
         {tenants.length > 0 && selectedTenantId && (
           <div className="mb-8">
             <TenantSelector
@@ -81,13 +104,37 @@ export function Dashboard({ tenants }: DashboardProps) {
 
         <div className="mb-8">
           <StatusSummary integrations={visibleIntegrations} isLoading={isLoading} />
+          {freshnessLabel && fetchedAt && (
+            <p className="text-muted mt-2 text-xs">
+              Estado actualizado{" "}
+              <time dateTime={fetchedAt} className="font-mono tabular-nums">
+                {freshnessLabel}
+              </time>
+            </p>
+          )}
         </div>
 
         <div className="grid gap-8 md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
           <div>
-            {isLoading && (
+            {hasError && (
+              <div className="border-line bg-surface rounded-lg border p-5">
+                <p className="text-fail text-sm" role="alert">
+                  No se pudieron cargar las integraciones de este cliente.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setReloadToken((token) => token + 1)}
+                  className="bg-ink text-canvas mt-4 rounded-lg px-4 py-2 text-sm font-medium transition duration-150 hover:opacity-90 active:translate-y-px"
+                >
+                  Reintentar carga
+                </button>
+              </div>
+            )}
+            {isLoading && !hasError && (
               <>
-                <p className="sr-only">Cargando integraciones…</p>
+                <p className="sr-only" role="status">
+                  Cargando integraciones…
+                </p>
                 <ul
                   aria-hidden
                   className="divide-line border-line divide-y overflow-hidden rounded-lg border"
@@ -101,10 +148,10 @@ export function Dashboard({ tenants }: DashboardProps) {
                 </ul>
               </>
             )}
-            {!isLoading && visibleIntegrations.length === 0 && (
+            {!hasError && !isLoading && visibleIntegrations.length === 0 && (
               <p className="text-muted text-sm">Este cliente todavía no tiene integraciones.</p>
             )}
-            {!isLoading && visibleIntegrations.length > 0 && (
+            {!hasError && !isLoading && visibleIntegrations.length > 0 && (
               <ul className="divide-line border-line bg-surface divide-y overflow-hidden rounded-lg border">
                 {visibleIntegrations.map((integration) => (
                   <li key={integration.id}>
