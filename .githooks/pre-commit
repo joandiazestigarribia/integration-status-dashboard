@@ -1,0 +1,11 @@
+#!/bin/sh
+# Corre los mismos checks que el CI antes de commitear. Se saltea con `git commit --no-verify`.
+set -e
+
+echo "pre-commit: corriendo npm run check (format, lint, typecheck, tests)..."
+npm run check
+
+if [ -n "$SONAR_TOKEN" ]; then
+  echo "pre-commit: SONAR_TOKEN detectado, corriendo el análisis de SonarCloud local..."
+  npm run sonar:local
+fi
