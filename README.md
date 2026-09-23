@@ -62,6 +62,35 @@ npm run typecheck    # genera los tipos de rutas de Next (next typegen) + tsc --
 npm run test         # Jest
 npm run test:coverage # Jest con cobertura de todo src (la que lee SonarCloud)
 npm run format       # Prettier (con el plugin de Tailwind)
+npm run format:check # Prettier sin escribir (lo que corre el CI)
+npm run check        # los mismos checks del CI: format:check + lint + typecheck + test:coverage
+npm run sonar:local  # análisis de SonarCloud local (requiere Docker y SONAR_TOKEN)
+```
+
+### Verificar antes de pushear
+
+Hay un hook de `pre-push` versionado en `.githooks/` que corre `npm run check`
+automáticamente antes de cada push (y el análisis de SonarCloud si `SONAR_TOKEN`
+está en el entorno). Se registra solo con `npm install` (o `npm run prepare`) y
+se saltea con `git push --no-verify`.
+
+`npm run check` corre exactamente lo que valida el job `quality` del CI (menos
+SonarCloud). Para SonarCloud, el mismo scanner que usa el CI se puede correr
+local y espera el quality gate (`sonar.qualitygate.wait=true`), así que sale con
+código distinto de cero si va a fallar:
+
+```bash
+export SONAR_TOKEN=...   # el mismo token que el secret de GitHub
+npm run test:coverage    # genera coverage/lcov.info
+npm run sonar:local
+```
+
+Trivy, en cambio, sólo corre en el job `container-scan` sobre la imagen Docker:
+
+```bash
+docker build -t integration-status-dashboard:local .
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy \
+  image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 integration-status-dashboard:local
 ```
 
 ## Estructura

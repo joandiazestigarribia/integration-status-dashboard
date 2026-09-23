@@ -72,12 +72,8 @@ describe("applyRetry", () => {
     events: [{ id: "evt-0", timestamp: "2025-12-31T00:00:00.000Z", status: "retrying", message: "previo" }],
   }
 
-  afterEach(() => jest.spyOn(Math, "random").mockRestore())
-
   it("cuando el reintento resuelve, pasa a up_to_date y agrega un evento nuevo al principio", () => {
-    jest.spyOn(Math, "random").mockReturnValue(0.9)
-
-    const updated = applyRetry(base)
+    const updated = applyRetry(base, () => 0.9)
 
     expect(updated.status).toBe("up_to_date")
     expect(updated.events[0].message).toBe("Reintento exitoso")
@@ -86,9 +82,7 @@ describe("applyRetry", () => {
   })
 
   it("cuando el reintento no resuelve, se mantiene en retrying y no toca lastSyncedAt", () => {
-    jest.spyOn(Math, "random").mockReturnValue(0.1)
-
-    const updated = applyRetry(base)
+    const updated = applyRetry(base, () => 0.1)
 
     expect(updated.status).toBe("retrying")
     expect(updated.events[0].message).toBe("Reintento en curso, todavía sin confirmación")

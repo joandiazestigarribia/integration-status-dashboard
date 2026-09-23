@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto"
 import {
   normalizeErpIntegration,
   normalizeLogisticsIntegration,
@@ -44,8 +45,12 @@ export function hasIntegration(tenantId: string, integrationId: string): boolean
   return listIntegrations(tenantId).some((integration) => integration.id === integrationId)
 }
 
-export function applyRetry(integration: Integration): Integration {
-  const succeeds = Math.random() > 0.33
+function secureRandom(): number {
+  return randomInt(0, 1_000_000) / 1_000_000
+}
+
+export function applyRetry(integration: Integration, random: () => number = secureRandom): Integration {
+  const succeeds = random() > 0.33
   const timestamp = new Date().toISOString()
 
   return {

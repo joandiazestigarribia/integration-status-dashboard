@@ -1,0 +1,11 @@
+#!/bin/sh
+# Corre los mismos checks que el CI antes de pushear. Se saltea con `git push --no-verify`.
+set -e
+
+echo "pre-push: corriendo npm run check (format, lint, typecheck, tests)..."
+npm run check
+
+if [ -n "$SONAR_TOKEN" ]; then
+  echo "pre-push: SONAR_TOKEN detectado, corriendo el análisis de SonarCloud local..."
+  npm run sonar:local
+fi
